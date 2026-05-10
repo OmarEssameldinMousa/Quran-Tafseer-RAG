@@ -89,6 +89,7 @@ html, body, [class*="css"] {
     text-align: right;
     line-height: 2.2;
     background: linear-gradient(135deg, #f0f7f4, #e8f5e9);
+    color: #212121;  /* Force dark text for readability against the light green/white background */
     border: 1px solid #a5d6a7;
     border-radius: 8px;
     padding: 20px;
