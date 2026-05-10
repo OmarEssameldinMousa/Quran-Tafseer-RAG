@@ -192,6 +192,19 @@ async def fetch_surah_alquran(
         log.warning(f"  Expected 2 editions, got {len(editions_data)} for surah {surah_num}")
         return []
 
+    # ── Guard: detect silent failure where API returns quran-uthmani for BOTH slots.
+    # This happens when the requested tafseer edition identifier is invalid —
+    # the API silently substitutes uthmani text instead of returning an error.
+    all_identifiers = {ed["edition"]["identifier"] for ed in editions_data}
+    if all_identifiers == {"quran-uthmani"}:
+        log.warning(
+            f"  Edition '{edition}' not recognised by alquran.cloud — "
+            f"API returned quran-uthmani for both slots (surah {surah_num}). "
+            f"Will fall back to spa5k."
+        )
+        return []
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Identify which edition is which by checking the identifier
     uthmani_ayahs  = None
     tafseer_ayahs  = None
@@ -245,6 +258,24 @@ async def fetch_book_alquran(
             log.warning(f"    Surah {surah_num:3d}/{meta[0]:<12} → 0 ayahs  ⚠️")
 
         await asyncio.sleep(0.5)   # 2 req/sec max — polite but fast
+
+    # ── Guard: whole-book corruption check ───────────────────────────────────
+    # If >5% of records have tafseer_text == ayah_text the book is corrupt.
+    # This catches any case where per-surah detection above was bypassed.
+    if records:
+        corrupt = sum(
+            1 for r in records
+            if r["tafseer_text"].strip() == r["ayah_text"].strip()
+        )
+        corrupt_ratio = corrupt / len(records)
+        if corrupt_ratio > 0.05:
+            log.warning(
+                f"  🚨 Corruption: {corrupt}/{len(records)} records have "
+                f"tafseer == ayah text ({corrupt_ratio:.0%}). "
+                f"Edition '{book['alquran_edition']}' is invalid — forcing spa5k fallback."
+            )
+            return []   # run() will trigger spa5k
+    # ─────────────────────────────────────────────────────────────────────────
 
     if failed:
         log.warning(f"  ⚠️  Failed surahs: {failed[:20]}")
